@@ -1,0 +1,49 @@
+name: Fetch RSS, rewrite and publish to Facebook
+
+on:
+  schedule:
+    - cron: '30 0 * * *'
+    - cron: '30 5 * * *'
+    - cron: '30 8 * * *'
+    - cron: '30 10 * * *'
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run fetch and publish
+        env:
+          HUGGINGFACE_API_KEY: ${{ secrets.HUGGINGFACE_API_KEY }}
+          HUGGINGFACE_MODEL: ${{ secrets.HUGGINGFACE_MODEL }}
+          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
+          FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
+          RSS_FEED_URL: ${{ secrets.RSS_FEED_URL }}
+        run: node scripts/fetch_and_publish.js
+
+      - name: Commit data/posted.json if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/posted.json || true
+          if ! git diff --cached --quiet; then
+            git commit -m "Auto: update posted.json" || true
+            git push origin HEAD:${{ github.ref_name }} || true
+          else
+            echo "No changes to commit"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
